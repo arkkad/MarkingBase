@@ -244,7 +244,7 @@
                     <branch>refs/heads/mvn-repo</branch>
                     <includes><include>**/*</include></includes>
                     <repositoryName>MarkingBase</repositoryName>
-                    <repositoryOwner>melnikvitaliy</repositoryOwner>
+                    <repositoryOwner>arkkad</repositoryOwner>
                 </configuration>
                 <executions>
                     <execution>
