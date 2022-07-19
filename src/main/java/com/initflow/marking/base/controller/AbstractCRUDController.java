@@ -10,9 +10,13 @@ import com.initflow.marking.base.permission.PermissionPath;
 import com.initflow.marking.base.service.CrudService;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpInputMessage;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.server.ServletServerHttpRequest;
@@ -21,8 +25,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.NativeWebRequest;
 
 import javax.servlet.http.HttpServletRequest;
+import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -136,6 +144,29 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
         R_DTO respDTO = getReadMapper().apply(obj);
         postCreateFunc(obj);
         return ResponseEntity.ok(respDTO);
+    }
+
+    @RequestMapping(value = "/export", method = RequestMethod.GET)
+    public @ResponseBody ResponseEntity<Resource> export(
+            Pageable pageable,
+            SR searchRequest,
+            HttpServletRequest request, @RequestHeader Map<String, String> incomeHeader) throws IOException {
+        File file = new File("/file.txt");
+
+        HttpHeaders header = new HttpHeaders();
+        header.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=img.jpg");
+        header.add("Cache-Control", "no-cache, no-store, must-revalidate");
+        header.add("Pragma", "no-cache");
+        header.add("Expires", "0");
+
+        Path path = Paths.get(file.getAbsolutePath());
+        ByteArrayResource resource = new ByteArrayResource(Files.readAllBytes(path));
+
+        return ResponseEntity.ok()
+                .headers(header)
+                .contentLength(file.length())
+                .contentType(MediaType.parseMediaType("application/octet-stream"))
+                .body(resource);
     }
 
     protected Function<T, R_DTO> getReadMapper() {
