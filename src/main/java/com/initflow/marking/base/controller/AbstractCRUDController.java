@@ -9,6 +9,10 @@ import com.initflow.marking.base.permission.CheckDataPermission;
 import com.initflow.marking.base.permission.PermissionPath;
 import com.initflow.marking.base.service.CrudService;
 import io.swagger.annotations.ApiOperation;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -18,19 +22,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.server.ServletServerHttpRequest;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.NativeWebRequest;
 
 import javax.servlet.http.HttpServletRequest;
-import java.io.File;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -46,7 +46,7 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
 
 //    private CRUDPermission permission;
 
-    public AbstractCRUDController(CrudService<T, ID> crudService, CrudMapper<T, C_DTO, U_DTO, R_DTO> mapper){
+    public AbstractCRUDController(CrudService<T, ID> crudService, CrudMapper<T, C_DTO, U_DTO, R_DTO> mapper) {
         this.crudService = crudService;
         this.mapper = mapper;
 //        this.permission = new DefaultCRUDPermissionImpl();
@@ -110,12 +110,12 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
     @ResponseBody
     public ResponseEntity<R_DTO> patchUpdate(@PathVariable ID id, NativeWebRequest webRequest) {
         HttpServletRequest servletRequest = webRequest.getNativeRequest(HttpServletRequest.class);
-        var req =  new ServletServerHttpRequest(servletRequest);
+        var req = new ServletServerHttpRequest(servletRequest);
 
         T obj = crudService.findOne(id).orElse(null);
-        if(obj == null)
+        if (obj == null)
             return ResponseEntity.ok(null);
-        T updatedObj  = readJavaType(obj, req);
+        T updatedObj = readJavaType(obj, req);
         updatedObj.setId(obj.getId());
         updatedObj = crudService.save(updatedObj);
         R_DTO respDTO = getReadMapper().apply(updatedObj);
@@ -126,8 +126,7 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
     private T readJavaType(Object object, HttpInputMessage inputMessage) {
         try {
             return this.objectMapper.readerForUpdating(object).readValue(inputMessage.getBody());
-        }
-        catch (IOException ex) {
+        } catch (IOException ex) {
             throw new HttpMessageNotReadableBaseException("Could not read document: " + ex.getMessage(), ex);
         }
     }
@@ -150,8 +149,45 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
     public @ResponseBody ResponseEntity<Resource> export(
             Pageable pageable,
             SR searchRequest,
-            HttpServletRequest request, @RequestHeader Map<String, String> incomeHeader) throws IOException {
-        File file = new File("/file.txt");
+            HttpServletRequest request,
+            @RequestHeader Map<String, String> incomeHeader) throws IOException {
+        Page<T> records = this.crudService.findAll(pageable, searchRequest);
+        T t = records.stream().findFirst().orElseThrow();
+
+        Field[] fields = t.getClass().getFields();
+        Workbook wb = new XSSFWorkbook();
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
+        Sheet sheet = wb.createSheet();
+        Row firstRow = sheet.createRow(0);
+        int cellNum = 0;
+        for (Field field : fields) {
+            firstRow.createCell(cellNum).setCellValue(field.getName());
+            cellNum++;
+        }
+
+
+        int rowNum = 1;
+        for (var record : records) {
+            Row row = sheet.createRow(rowNum);
+//            row.createCell(0).setCellValue(ccModel.getGtin());
+//            row.createCell(1).setCellValue(ccModel.getCertType());
+//            row.createCell(2).setCellValue(ccModel.getCertNum());
+//            row.createCell(3).setCellValue(ccModel.getCertDate());
+//            row.createCell(4).setCellValue(ccModel.getCertDateBegin());
+//            row.createCell(5).setCellValue(ccModel.getCertDateEnd());
+//            row.createCell(6).setCellValue(ccModel.getCountry());
+//            row.createCell(7).setCellValue(ccModel.getId());
+            rowNum++;
+        }
+
+        try {
+            wb.write(bos);
+        } finally {
+            bos.close();
+        }
+        byte[] bytes = bos.toByteArray();
 
         HttpHeaders header = new HttpHeaders();
         header.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=img.jpg");
@@ -159,12 +195,11 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
         header.add("Pragma", "no-cache");
         header.add("Expires", "0");
 
-        Path path = Paths.get(file.getAbsolutePath());
-        ByteArrayResource resource = new ByteArrayResource(Files.readAllBytes(path));
+        ByteArrayResource resource = new ByteArrayResource(bytes);
 
         return ResponseEntity.ok()
                 .headers(header)
-                .contentLength(file.length())
+                .contentLength(bytes.length)
                 .contentType(MediaType.parseMediaType("application/octet-stream"))
                 .body(resource);
     }
@@ -193,32 +228,35 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
 
     public abstract String getCreatePermissionPath();
 
-    public boolean getReadPerm(ID id, HttpServletRequest request, Map<String, String> header){
+    public boolean getReadPerm(ID id, HttpServletRequest request, Map<String, String> header) {
         return true;
     }
 
-    public boolean getSearchPerm(SR searchRequest, HttpServletRequest request, Map<String, String> header){
+    public boolean getSearchPerm(SR searchRequest, HttpServletRequest request, Map<String, String> header) {
         return true;
     }
 
-    public boolean getUpdatePerm(ID id, U_DTO dto, HttpServletRequest request, Map<String, String> header){
+    public boolean getUpdatePerm(ID id, U_DTO dto, HttpServletRequest request, Map<String, String> header) {
         return true;
     }
 
-    public boolean getPatchPerm(ID id, NativeWebRequest webRequest){
+    public boolean getPatchPerm(ID id, NativeWebRequest webRequest) {
         return true;
     }
 
-    public boolean getCreatePerm(C_DTO dto, HttpServletRequest request, Map<String, String> header){
+    public boolean getCreatePerm(C_DTO dto, HttpServletRequest request, Map<String, String> header) {
         return true;
     }
 
-    public boolean getReadListPerm(List<ID> ids, HttpServletRequest request, Map<String, String> header){
+    public boolean getReadListPerm(List<ID> ids, HttpServletRequest request, Map<String, String> header) {
         return true;
     }
 
-    public void postCreateFunc(T obj){}
-//    public void postReadFunc(T obj){}
-    public void postUpdateFunc(T obj){}
+    public void postCreateFunc(T obj) {
+    }
+
+    //    public void postReadFunc(T obj){}
+    public void postUpdateFunc(T obj) {
+    }
 
 }
