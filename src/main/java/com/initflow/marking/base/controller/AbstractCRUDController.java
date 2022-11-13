@@ -3,38 +3,54 @@ package com.initflow.marking.base.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.initflow.marking.base.exception.model.HttpMessageNotReadableBaseException;
 import com.initflow.marking.base.mapper.domain.CrudMapper;
+import com.initflow.marking.base.models.ExportRequest;
 import com.initflow.marking.base.models.SearchRequest;
 import com.initflow.marking.base.models.domain.IDObj;
 import com.initflow.marking.base.permission.CheckDataPermission;
 import com.initflow.marking.base.permission.PermissionPath;
 import com.initflow.marking.base.service.CrudService;
+import com.opencsv.bean.ColumnPositionMappingStrategy;
+import com.opencsv.bean.StatefulBeanToCsv;
+import com.opencsv.bean.StatefulBeanToCsvBuilder;
+import com.opencsv.exceptions.CsvDataTypeMismatchException;
+import com.opencsv.exceptions.CsvRequiredFieldEmptyException;
 import io.swagger.annotations.ApiOperation;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Serializable;
+import java.io.Writer;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.ServletServerHttpRequest;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.context.request.NativeWebRequest;
-
-import javax.servlet.http.HttpServletRequest;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.Serializable;
-import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
 
 public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID extends Serializable, SR extends SearchRequest> {
 
@@ -133,7 +149,6 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
 
     @PermissionPath("#this.object.getCreatePermissionPath()")
     @CheckDataPermission("#this.object.getCreatePerm(#dto, #request, #header)")
-//    @PreAuthorize("hasAnyAuthority(#root.this.createRoles) and #root.this.getCreatePerm(#dto, #request, #header)")
     @RequestMapping(method = RequestMethod.POST)
     @ApiOperation(value = "Создание сущости/Create document", notes = "Создание сущости/Create document")
     public @ResponseBody
@@ -145,63 +160,49 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
         return ResponseEntity.ok(respDTO);
     }
 
-    @RequestMapping(value = "/export", method = RequestMethod.GET)
+    @RequestMapping(value = "/export", method = RequestMethod.POST)
     public @ResponseBody ResponseEntity<Resource> export(
-            Pageable pageable,
-            SR searchRequest,
-            HttpServletRequest request,
-            @RequestHeader Map<String, String> incomeHeader) throws IOException {
-        Page<T> records = this.crudService.findAll(pageable, searchRequest);
-        T t = records.stream().findFirst().orElseThrow();
+            @RequestBody ExportRequest<SR> exportRequest
+    ) throws IOException {
 
-        Field[] fields = t.getClass().getFields();
-        Workbook wb = new XSSFWorkbook();
+        int exported = 0;
+        int currPage = 0;
+        List<R_DTO> records = new ArrayList<>();
+        Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 200), exportRequest.getSearchRequest());
+        T t = page.stream().findFirst().orElseThrow();
+        R_DTO r_dto = mapper.readMapping(t);
+        while (exported < exportRequest.getUserCount() && currPage <= page.getTotalPages()) {
+            page = this.crudService.findAll(PageRequest.of(currPage, 200), exportRequest.getSearchRequest());
+            List<T> content = page.getContent();
 
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            List<R_DTO> endpoints = content.stream()
+                    .map(mapper::readMapping)
+                    .collect(Collectors.toList());
 
-        Sheet sheet = wb.createSheet();
-        Row firstRow = sheet.createRow(0);
-        int cellNum = 0;
-        for (Field field : fields) {
-            firstRow.createCell(cellNum).setCellValue(field.getName());
-            cellNum++;
+            records.addAll(endpoints);
+            exported += page.getContent().size();
+            currPage += 1;
         }
+        List<String> columns = Arrays.stream(FieldUtils.getAllFields(t.getClass()))
+                .map(Field::getName).collect(Collectors.toList());
 
+        ColumnPositionMappingStrategy<R_DTO> mappingStrategy =
+                new ColumnPositionMappingStrategy<>();
+        mappingStrategy.setColumnMapping(columns.toArray(String[]::new));
+        mappingStrategy.setType((Class<? extends R_DTO>) r_dto.getClass());
 
-        int rowNum = 1;
-        for (var record : records) {
-            Row row = sheet.createRow(rowNum);
-//            row.createCell(0).setCellValue(ccModel.getGtin());
-//            row.createCell(1).setCellValue(ccModel.getCertType());
-//            row.createCell(2).setCellValue(ccModel.getCertNum());
-//            row.createCell(3).setCellValue(ccModel.getCertDate());
-//            row.createCell(4).setCellValue(ccModel.getCertDateBegin());
-//            row.createCell(5).setCellValue(ccModel.getCertDateEnd());
-//            row.createCell(6).setCellValue(ccModel.getCountry());
-//            row.createCell(7).setCellValue(ccModel.getId());
-            rowNum++;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        try (Writer writer = new OutputStreamWriter(out);) {
+            StatefulBeanToCsvBuilder<R_DTO> builder =
+                    new StatefulBeanToCsvBuilder<>(writer);
+            StatefulBeanToCsv<R_DTO> beanWriter =
+                    builder.withMappingStrategy(mappingStrategy).build();
+            beanWriter.write(records);
+        } catch (CsvRequiredFieldEmptyException | CsvDataTypeMismatchException e) {
+            throw new RuntimeException(e);
         }
-
-        try {
-            wb.write(bos);
-        } finally {
-            bos.close();
-        }
-        byte[] bytes = bos.toByteArray();
-
-        HttpHeaders header = new HttpHeaders();
-        header.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=img.jpg");
-        header.add("Cache-Control", "no-cache, no-store, must-revalidate");
-        header.add("Pragma", "no-cache");
-        header.add("Expires", "0");
-
-        ByteArrayResource resource = new ByteArrayResource(bytes);
-
-        return ResponseEntity.ok()
-                .headers(header)
-                .contentLength(bytes.length)
-                .contentType(MediaType.parseMediaType("application/octet-stream"))
-                .body(resource);
+        return getResponceEntityByOutputStream(new ByteArrayResource(out.toByteArray()), "export.xlsx");
     }
 
     protected Function<T, R_DTO> getReadMapper() {
@@ -215,12 +216,6 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
     protected Function<C_DTO, T> getCreateMapper() {
         return (C_DTO dto) -> mapper.createMapping(dto);
     }
-
-//    public abstract String[] getReadRoles();
-//
-//    public abstract String[] getUpdateRoles();
-//
-//    public abstract String[] getCreateRoles();
 
     public abstract String getReadPermissionPath();
 
@@ -257,6 +252,19 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
 
     //    public void postReadFunc(T obj){}
     public void postUpdateFunc(T obj) {
+    }
+
+    private ResponseEntity<Resource> getResponceEntityByOutputStream(ByteArrayResource resource, String fileName) {
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.add("Content-Disposition", "attachment; filename=" + fileName);
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .contentLength(resource.contentLength())
+                .contentType(MediaType.parseMediaType("application/octet-stream"))
+                .body(resource);
     }
 
 }
