@@ -3,54 +3,32 @@ package com.initflow.marking.base.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.initflow.marking.base.exception.model.HttpMessageNotReadableBaseException;
 import com.initflow.marking.base.mapper.domain.CrudMapper;
-import com.initflow.marking.base.models.ExportRequest;
 import com.initflow.marking.base.models.SearchRequest;
 import com.initflow.marking.base.models.domain.IDObj;
 import com.initflow.marking.base.permission.CheckDataPermission;
 import com.initflow.marking.base.permission.PermissionPath;
 import com.initflow.marking.base.service.CrudService;
-import com.opencsv.bean.ColumnPositionMappingStrategy;
-import com.opencsv.bean.StatefulBeanToCsv;
-import com.opencsv.bean.StatefulBeanToCsvBuilder;
-import com.opencsv.exceptions.CsvDataTypeMismatchException;
-import com.opencsv.exceptions.CsvRequiredFieldEmptyException;
 import io.swagger.annotations.ApiOperation;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Serializable;
-import java.io.Writer;
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import javax.servlet.http.HttpServletRequest;
-
-import org.apache.commons.lang3.reflect.FieldUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.ServletServerHttpRequest;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.NativeWebRequest;
+
+import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID extends Serializable, SR extends SearchRequest> {
 
@@ -160,50 +138,50 @@ public abstract class AbstractCRUDController<T extends IDObj<ID>, C_DTO, U_DTO, 
         return ResponseEntity.ok(respDTO);
     }
 
-    @RequestMapping(value = "/export", method = RequestMethod.POST)
-    public @ResponseBody ResponseEntity<Resource> export(
-            @RequestBody ExportRequest<SR> exportRequest
-    ) throws IOException {
-
-        int exported = 0;
-        int currPage = 0;
-        List<R_DTO> records = new ArrayList<>();
-        Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 200), exportRequest.getSearchRequest());
-        T t = page.stream().findFirst().orElseThrow();
-        R_DTO r_dto = mapper.readMapping(t);
-        while (exported < exportRequest.getUserCount() && currPage <= page.getTotalPages()) {
-            page = this.crudService.findAll(PageRequest.of(currPage, 200), exportRequest.getSearchRequest());
-            List<T> content = page.getContent();
-
-            List<R_DTO> endpoints = content.stream()
-                    .map(mapper::readMapping)
-                    .collect(Collectors.toList());
-
-            records.addAll(endpoints);
-            exported += page.getContent().size();
-            currPage += 1;
-        }
-        List<String> columns = Arrays.stream(FieldUtils.getAllFields(t.getClass()))
-                .map(Field::getName).collect(Collectors.toList());
-
-        ColumnPositionMappingStrategy<R_DTO> mappingStrategy =
-                new ColumnPositionMappingStrategy<>();
-        mappingStrategy.setColumnMapping(columns.toArray(String[]::new));
-        mappingStrategy.setType((Class<? extends R_DTO>) r_dto.getClass());
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-
-        try (Writer writer = new OutputStreamWriter(out);) {
-            StatefulBeanToCsvBuilder<R_DTO> builder =
-                    new StatefulBeanToCsvBuilder<>(writer);
-            StatefulBeanToCsv<R_DTO> beanWriter =
-                    builder.withMappingStrategy(mappingStrategy).build();
-            beanWriter.write(records);
-        } catch (CsvRequiredFieldEmptyException | CsvDataTypeMismatchException e) {
-            throw new RuntimeException(e);
-        }
-        return getResponceEntityByOutputStream(new ByteArrayResource(out.toByteArray()), "export.xlsx");
-    }
+//    @RequestMapping(value = "/export", method = RequestMethod.POST)
+//    public @ResponseBody ResponseEntity<Resource> export(
+//            @RequestBody ExportRequest<SR> exportRequest
+//    ) throws IOException {
+//
+//        int exported = 0;
+//        int currPage = 0;
+//        List<R_DTO> records = new ArrayList<>();
+//        Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 200), exportRequest.getSearchRequest());
+//        T t = page.stream().findFirst().orElseThrow();
+//        R_DTO r_dto = mapper.readMapping(t);
+//        while (exported < exportRequest.getUserCount() && currPage <= page.getTotalPages()) {
+//            page = this.crudService.findAll(PageRequest.of(currPage, 200), exportRequest.getSearchRequest());
+//            List<T> content = page.getContent();
+//
+//            List<R_DTO> endpoints = content.stream()
+//                    .map(mapper::readMapping)
+//                    .collect(Collectors.toList());
+//
+//            records.addAll(endpoints);
+//            exported += page.getContent().size();
+//            currPage += 1;
+//        }
+//        List<String> columns = Arrays.stream(FieldUtils.getAllFields(t.getClass()))
+//                .map(Field::getName).collect(Collectors.toList());
+//
+//        ColumnPositionMappingStrategy<R_DTO> mappingStrategy =
+//                new ColumnPositionMappingStrategy<>();
+//        mappingStrategy.setColumnMapping(columns.toArray(String[]::new));
+//        mappingStrategy.setType((Class<? extends R_DTO>) r_dto.getClass());
+//
+//        ByteArrayOutputStream out = new ByteArrayOutputStream();
+//
+//        try (Writer writer = new OutputStreamWriter(out);) {
+//            StatefulBeanToCsvBuilder<R_DTO> builder =
+//                    new StatefulBeanToCsvBuilder<>(writer);
+//            StatefulBeanToCsv<R_DTO> beanWriter =
+//                    builder.withMappingStrategy(mappingStrategy).build();
+//            beanWriter.write(records);
+//        } catch (CsvRequiredFieldEmptyException | CsvDataTypeMismatchException e) {
+//            throw new RuntimeException(e);
+//        }
+//        return getResponceEntityByOutputStream(new ByteArrayResource(out.toByteArray()), "export.xlsx");
+//    }
 
     protected Function<T, R_DTO> getReadMapper() {
         return (T obj) -> mapper.readMapping(obj);
