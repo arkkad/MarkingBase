@@ -95,19 +95,24 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
         List<String> columns = Arrays.stream(FieldUtils.getAllFields(t.getClass()))
                 .map(Field::getName).collect(Collectors.toList());
 
-        ColumnPositionMappingStrategy<R_DTO> mappingStrategy =
-                new ColumnPositionMappingStrategy<>();
+        CustomStrategy<R_DTO> mappingStrategy =
+                new CustomStrategy<>();
         mappingStrategy.setColumnMapping(columns.toArray(String[]::new));
         mappingStrategy.setType((Class<? extends R_DTO>) r_dto.getClass());
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-        try (Writer writer = new OutputStreamWriter(out);) {
+        try (OutputStreamWriter writer = new OutputStreamWriter(out);) {
             StatefulBeanToCsvBuilder<R_DTO> builder =
                     new StatefulBeanToCsvBuilder<>(writer);
             StatefulBeanToCsv<R_DTO> beanWriter =
-                    builder.withMappingStrategy(mappingStrategy).build();
+                    builder.withMappingStrategy(mappingStrategy)
+                            .withSeparator(';')
+                            .build();
+
+
             beanWriter.write(records);
+            writer.flush();
 
             exportMailService.send(out, mails, company, wh, pg);
 

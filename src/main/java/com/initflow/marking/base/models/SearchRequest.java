@@ -1,9 +1,11 @@
 package com.initflow.marking.base.models;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+
 import java.util.Set;
 
 public class SearchRequest<T> {
-
+    @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
     private Set<T> ids;
     private T lastId;
     private T lastIdPageable;
