@@ -47,12 +47,8 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
         T t = page.stream().findFirst().orElseThrow();
         R_DTO r_dto = mapper.readMapping(t);
         while (currPage <= page.getTotalPages()) {
-            Long lastid = 0L;
             page = this.crudService.findAll(PageRequest.of(currPage, 2000), searchRequest);
             List<T> content = page.getContent();
-
-            Optional<T> reduce = content.stream().reduce((first, second) -> second);
-            if (reduce.isPresent()) lastid = (Long) reduce.get().getId();
 
             List<R_DTO> endpoints = content.stream()
                     .map(mapper::readMapping)
@@ -77,7 +73,9 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                     StatefulBeanToCsvBuilder<R_DTO> builder =
                             new StatefulBeanToCsvBuilder<>(writer);
                     StatefulBeanToCsv<R_DTO> beanWriter =
-                            builder.withMappingStrategy(mappingStrategy).build();
+                            builder.withMappingStrategy(mappingStrategy)
+                                    .withSeparator(';')
+                                    .build();
                     beanWriter.write(records);
 
                     exportMailService.send(out, mails, company, wh, pg);
@@ -85,7 +83,6 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                 } catch (CsvRequiredFieldEmptyException | CsvDataTypeMismatchException e) {
                     exportMailService.sendError(mails, e, company, wh, pg);
                 }
-                searchRequest.setLastId(lastid);
                 records = new ArrayList<>();
                 exported = 0;
                 //
