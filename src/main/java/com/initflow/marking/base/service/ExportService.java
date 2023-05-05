@@ -62,8 +62,8 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                 List<String> columns = Arrays.stream(FieldUtils.getAllFields(t.getClass()))
                         .map(Field::getName).collect(Collectors.toList());
 
-                ColumnPositionMappingStrategy<R_DTO> mappingStrategy =
-                        new ColumnPositionMappingStrategy<>();
+                CustomStrategy<R_DTO> mappingStrategy =
+                        new CustomStrategy<>();
                 mappingStrategy.setColumnMapping(columns.toArray(String[]::new));
                 mappingStrategy.setType((Class<? extends R_DTO>) r_dto.getClass());
 
