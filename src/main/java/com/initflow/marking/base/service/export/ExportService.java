@@ -1,8 +1,12 @@
-package com.initflow.marking.base.service;
+package com.initflow.marking.base.service.export;
 
+import com.initflow.marking.base.exception.model.MetricsBaseRuntimeException;
 import com.initflow.marking.base.mapper.domain.CrudMapper;
 import com.initflow.marking.base.models.SearchRequest;
 import com.initflow.marking.base.models.domain.IDObj;
+import com.initflow.marking.base.service.CrudService;
+import com.initflow.marking.base.service.CustomStrategy;
+import com.initflow.marking.base.service.storage.StorageService;
 import com.opencsv.bean.StatefulBeanToCsv;
 import com.opencsv.bean.StatefulBeanToCsvBuilder;
 import com.opencsv.exceptions.CsvDataTypeMismatchException;
@@ -22,31 +26,27 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID extends Serializable, SR extends SearchRequest> {
-    private CrudService<T, ID> crudService;
-    private CrudMapper<T, C_DTO, U_DTO, R_DTO> mapper;
+    private final CrudService<T, ID> crudService;
+    private final CrudMapper<T, C_DTO, U_DTO, R_DTO> mapper;
+    private final StorageService storageService;
 
-    private MailService exportMailService;
-
-    protected ExportService(CrudService<T, ID> crudService, CrudMapper<T, C_DTO, U_DTO, R_DTO> mapper, MailService exportMailService) {
+    protected ExportService(
+            CrudService<T, ID> crudService,
+            CrudMapper<T, C_DTO, U_DTO, R_DTO> mapper,
+            StorageService storageService
+    ) {
         this.crudService = crudService;
         this.mapper = mapper;
-        this.exportMailService = exportMailService;
+        this.storageService = storageService;
     }
 
-    public void export(
-            SR searchRequest,
-            List<String> mails,
-            String company,
-            String wh,
-            String pg
-    ) {
-        int exported = 0;
+    public String export(SR searchRequest, String username) {
         int currPage = 0;
-        int exportPlan = 50_000;
         List<R_DTO> records = new ArrayList<>();
+
         Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 200), searchRequest);
         T t = page.stream().findFirst().orElseThrow();
-        R_DTO r_dto = mapper.readMapping(t);
+        R_DTO readDto = mapper.readMapping(t);
 
         List<String> columns = Arrays.stream(FieldUtils.getAllFields(t.getClass()))
                 .map(Field::getName).collect(Collectors.toList());
@@ -60,44 +60,22 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                     .collect(Collectors.toList());
 
             records.addAll(endpoints);
-            exported += page.getContent().size();
             currPage += 1;
-            if (exported >= exportPlan) {
-                //
-                sendReport(columns,
-                        r_dto,
-                        records,
-                        mails,
-                        company,
-                        wh,
-                        pg,
-                        t.getClass().getSimpleName()
-                );
-                records = new ArrayList<>();
-                exported = 0;
-                //
-            }
         }
-        sendReport(columns,
-                r_dto,
+        return saveExpotReportToS3Storage(columns,
+                readDto,
                 records,
-                mails,
-                company,
-                wh,
-                pg,
-                t.getClass().getSimpleName()
+                t.getClass().getSimpleName(),
+                username
         );
     }
 
-    private void sendReport(
+    private String saveExpotReportToS3Storage(
             List<String> columns,
             R_DTO r_dto,
             List<R_DTO> records,
-            List<String> mails,
-            String company,
-            String wh,
-            String pg,
-            String journalName
+            String journalName,
+            String username
     ) {
 
         CustomStrategy<R_DTO> mappingStrategy =
@@ -119,10 +97,10 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
             beanWriter.write(records);
             writer.flush();
 
-            exportMailService.send(out, mails, company, wh, pg, journalName);
+            return storageService.save(out, journalName, username);
 
         } catch (CsvRequiredFieldEmptyException | CsvDataTypeMismatchException | IOException e) {
-            exportMailService.sendError(mails, e, company, wh, pg);
+            throw new MetricsBaseRuntimeException(e);
         }
     }
 }
