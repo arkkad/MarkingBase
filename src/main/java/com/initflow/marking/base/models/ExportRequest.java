@@ -6,6 +6,8 @@ public class ExportRequest<SR> {
     SR searchRequest;
     int userCount;
 
+    SortingProperties sortingProperties;
+
     List<String> emails;
 
     public SR getSearchRequest() {
@@ -30,5 +32,13 @@ public class ExportRequest<SR> {
 
     public void setEmails(List<String> emails) {
         this.emails = emails;
+    }
+
+    public SortingProperties getSortingProperties() {
+        return sortingProperties;
+    }
+
+    public void setSortingProperties(SortingProperties sortingProperties) {
+        this.sortingProperties = sortingProperties;
     }
 }

@@ -3,6 +3,7 @@ package com.initflow.marking.base.service.export;
 import com.initflow.marking.base.exception.model.MetricsBaseRuntimeException;
 import com.initflow.marking.base.mapper.domain.CrudMapper;
 import com.initflow.marking.base.models.SearchRequest;
+import com.initflow.marking.base.models.SortingProperties;
 import com.initflow.marking.base.models.domain.IDObj;
 import com.initflow.marking.base.service.CrudService;
 import com.initflow.marking.base.service.CustomStrategy;
@@ -14,6 +15,7 @@ import com.opencsv.exceptions.CsvRequiredFieldEmptyException;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,6 +25,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID extends Serializable, SR extends SearchRequest> {
@@ -40,19 +43,24 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
         this.storageService = storageService;
     }
 
-    public String export(SR searchRequest, String username) {
+    public String export(SR searchRequest, SortingProperties sortingProperties, String username) {
         int currPage = 0;
         List<R_DTO> records = new ArrayList<>();
-
-        Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 200), searchRequest);
+        Sort.Order order = new Sort.Order(Sort.Direction.fromString(sortingProperties.getOrder()), sortingProperties.getField());
+        Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 1, Sort.by(order)), searchRequest);
         T t = page.stream().findFirst().orElseThrow();
         R_DTO readDto = mapper.readMapping(t);
 
-        List<String> columns = Arrays.stream(FieldUtils.getAllFields(t.getClass()))
-                .map(Field::getName).collect(Collectors.toList());
+        List<String> columns = new ArrayList<>();
+        columns.add("id");
+
+        Arrays.stream(FieldUtils.getAllFields(readDto.getClass()))
+                .map(Field::getName)
+                .filter(it -> !Objects.equals(it, "id") && !Objects.equals(it, "certificates"))
+                .forEach(columns::add);
 
         while (currPage <= page.getTotalPages()) {
-            page = this.crudService.findAll(PageRequest.of(currPage, 2000), searchRequest);
+            page = this.crudService.findAll(PageRequest.of(currPage, 2000, Sort.by(order)), searchRequest);
             List<T> content = page.getContent();
 
             List<R_DTO> endpoints = content.stream()
