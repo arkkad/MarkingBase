@@ -56,7 +56,9 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
 
         Arrays.stream(FieldUtils.getAllFields(readDto.getClass()))
                 .map(Field::getName)
-                .filter(it -> !Objects.equals(it, "id") && !Objects.equals(it, "certificates"))
+                .filter(it -> !Objects.equals(it, "id")
+                        && !Objects.equals(it, "certificates")
+                        && !Objects.equals(it, "errors"))
                 .forEach(columns::add);
 
         while (currPage <= page.getTotalPages()) {
