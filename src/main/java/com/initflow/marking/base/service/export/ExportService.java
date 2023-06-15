@@ -16,6 +16,7 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -25,7 +26,6 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID extends Serializable, SR extends SearchRequest> {
@@ -43,7 +43,9 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
         this.storageService = storageService;
     }
 
+    @Transactional
     public String export(SR searchRequest, SortingProperties sortingProperties, String username) {
+        List<String> nonSuitableColumns = List.of("Id", "Id", "certificates", "errors");
         int currPage = 0;
         List<R_DTO> records = new ArrayList<>();
         Sort.Order order = new Sort.Order(Sort.Direction.fromString(sortingProperties.getOrder()), sortingProperties.getField());
@@ -53,12 +55,9 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
 
         List<String> columns = new ArrayList<>();
         columns.add("id");
-
         Arrays.stream(FieldUtils.getAllFields(readDto.getClass()))
                 .map(Field::getName)
-                .filter(it -> !Objects.equals(it, "id")
-                        && !Objects.equals(it, "certificates")
-                        && !Objects.equals(it, "errors"))
+                .filter(it -> !nonSuitableColumns.contains(it))
                 .forEach(columns::add);
 
         while (currPage <= page.getTotalPages()) {
