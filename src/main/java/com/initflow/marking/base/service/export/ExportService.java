@@ -45,7 +45,7 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
 
     @Transactional
     public String export(SR searchRequest, SortingProperties sortingProperties, String username) {
-        List<String> nonSuitableColumns = List.of("Id", "Id", "certificates", "errors");
+        List<String> nonSuitableColumns = List.of("Id", "id", "certificates", "errors");
         int currPage = 0;
         List<R_DTO> records = new ArrayList<>();
         Sort.Order order = new Sort.Order(Sort.Direction.fromString(sortingProperties.getOrder()), sortingProperties.getField());
