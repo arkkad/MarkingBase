@@ -16,7 +16,6 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -43,7 +42,6 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
         this.storageService = storageService;
     }
 
-    @Transactional
     public String export(SR searchRequest, SortingProperties sortingProperties, String username) {
         List<String> nonSuitableColumns = List.of("Id", "id", "certificates", "errors");
         int currPage = 0;
