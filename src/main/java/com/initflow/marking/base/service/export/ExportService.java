@@ -59,7 +59,7 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                 .filter(it -> !nonSuitableColumns.contains(it))
                 .forEach(columns::add);
 
-        while (currPage <= page.getTotalPages() && exported <= userCount) {
+        while (currPage <= page.getTotalPages() && exported < userCount) {
             page = this.crudService.findAll(PageRequest.of(currPage, 200, Sort.by(order)), searchRequest);
             List<T> content = page.getContent();
 
