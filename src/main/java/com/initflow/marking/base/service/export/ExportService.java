@@ -42,9 +42,10 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
         this.storageService = storageService;
     }
 
-    public String export(SR searchRequest, SortingProperties sortingProperties, String username) {
+    public String export(SR searchRequest, SortingProperties sortingProperties, String username, Integer userCount) {
         List<String> nonSuitableColumns = List.of("Id", "id", "certificates", "errors");
         int currPage = 0;
+        int exported = 0;
         List<R_DTO> records = new ArrayList<>();
         Sort.Order order = new Sort.Order(Sort.Direction.fromString(sortingProperties.getOrder()), sortingProperties.getField());
         Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 1, Sort.by(order)), searchRequest);
@@ -58,8 +59,8 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                 .filter(it -> !nonSuitableColumns.contains(it))
                 .forEach(columns::add);
 
-        while (currPage <= page.getTotalPages()) {
-            page = this.crudService.findAll(PageRequest.of(currPage, 2000, Sort.by(order)), searchRequest);
+        while (currPage <= page.getTotalPages() && exported <= userCount) {
+            page = this.crudService.findAll(PageRequest.of(currPage, 200, Sort.by(order)), searchRequest);
             List<T> content = page.getContent();
 
             List<R_DTO> endpoints = content.stream()
@@ -68,6 +69,7 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
 
             records.addAll(endpoints);
             currPage += 1;
+            exported += content.size();
         }
         return saveExpotReportToS3Storage(columns,
                 readDto,
