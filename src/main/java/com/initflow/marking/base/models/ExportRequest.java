@@ -1,10 +1,14 @@
 package com.initflow.marking.base.models;
 
+import java.util.List;
+
 public class ExportRequest<SR> {
     SR searchRequest;
     int userCount;
 
     SortingProperties sortingProperties;
+
+    List<String> emails;
 
     public SR getSearchRequest() {
         return searchRequest;
@@ -20,6 +24,14 @@ public class ExportRequest<SR> {
 
     public void setUserCount(int userCount) {
         this.userCount = userCount;
+    }
+
+    public List<String> getEmails() {
+        return emails;
+    }
+
+    public void setEmails(List<String> emails) {
+        this.emails = emails;
     }
 
     public SortingProperties getSortingProperties() {
