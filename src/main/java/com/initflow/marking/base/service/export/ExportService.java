@@ -48,7 +48,8 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
         int exported = 0;
         List<R_DTO> records = new ArrayList<>();
         Sort.Order order = new Sort.Order(Sort.Direction.fromString(sortingProperties.getOrder()), sortingProperties.getField());
-        Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 1, Sort.by(order)), searchRequest);
+        Sort ordeAndIdSort = Sort.by(order).and(Sort.by("id"));
+        Page<T> page = this.crudService.findAll(PageRequest.of(currPage, 1, ordeAndIdSort), searchRequest);
         T t = page.stream().findFirst().orElseThrow();
         R_DTO readDto = mapper.readMapping(t);
 
@@ -60,7 +61,7 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                 .forEach(columns::add);
 
         while (currPage <= page.getTotalPages() && exported < userCount) {
-            page = this.crudService.findAll(PageRequest.of(currPage, 2000, Sort.by(order)), searchRequest);
+            page = this.crudService.findAll(PageRequest.of(currPage, 2000, ordeAndIdSort), searchRequest);
             List<T> content = page.getContent();
 
             List<R_DTO> endpoints = content.stream()
