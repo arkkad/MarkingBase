@@ -60,7 +60,7 @@ public abstract class ExportService<T extends IDObj<ID>, C_DTO, U_DTO, R_DTO, ID
                 .forEach(columns::add);
 
         while (currPage <= page.getTotalPages() && exported < userCount) {
-            page = this.crudService.findAll(PageRequest.of(currPage, 200, Sort.by(order)), searchRequest);
+            page = this.crudService.findAll(PageRequest.of(currPage, 2000, Sort.by(order)), searchRequest);
             List<T> content = page.getContent();
 
             List<R_DTO> endpoints = content.stream()
